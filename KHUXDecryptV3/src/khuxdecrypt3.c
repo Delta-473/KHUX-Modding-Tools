@@ -31,11 +31,19 @@
 /* lodepng (png encoder): from https://github.com/lvandeve/lodepng */
 #include "lodepng.h" 
 
+// helper endian functions
+#include "helper_endian.h"
+
 /* make sure bigfiles work, not sure which is better in all PCs */
+#ifdef __GNUC__
 #define khux_ftello ftello     //GCC
 #define khux_fseeko fseeko     //GCC
-//#define khux_ftello _ftelli64    //MSVC
-//#define khux_fseeko _fseeki64    //MSVC
+#elif _MSC_VER
+#define khux_ftello _ftelli64    //MSVC
+#define khux_fseeko _fseeki64    //MSVC
+#else
+#error Unsupported compiler version, add compiler specific functions
+#endif
 
 #define KHUX_PATH_LIMIT 32767
 #define KHUX_MAX_FILES 10
@@ -45,43 +53,6 @@
 #define BGAD_MAX_NAME_SIZE 0x2000
 #define BGAD_MAX_IMG_SIZE (25*1024*1024)
 #define BGAD_MAX_FILES 0x400000
-
-/* ************************************************************************* */
-
-static inline void put_u16be(uint8_t* buf, uint16_t v) {
-    buf[0] = (uint8_t)((v >> 8u) & 0xFF);
-    buf[1] = (uint8_t)(v & 0xFF);
-}
-static inline void put_u16le(uint8_t* buf, uint16_t v) {
-    buf[0] = (uint8_t)(v & 0xFF);
-    buf[1] = (uint8_t)(v >> 8u);
-}
-static inline void put_u32be(uint8_t* buf, uint32_t v) {
-    buf[0] = (uint8_t)((v >> 24u) & 0xFF);
-    buf[1] = (uint8_t)((v >> 16u) & 0xFF);
-    buf[2] = (uint8_t)((v >> 8u) & 0xFF);
-    buf[3] = (uint8_t)(v & 0xFF);
-}
-static inline void put_u32le(uint8_t* buf, uint32_t v) {
-    buf[0] = (uint8_t)(v & 0xFF);
-    buf[1] = (uint8_t)((v >> 8u) & 0xFF);
-    buf[2] = (uint8_t)((v >> 16u) & 0xFF);
-    buf[3] = (uint8_t)((v >> 24u) & 0xFF);
-}
-
-static inline uint16_t get_u16be(uint8_t* p) {
-    return (uint16_t)((p[0]<<8u) | (p[1]));
-}
-static inline uint32_t get_u32be(uint8_t* p) {
-    return (uint32_t)((p[0] << 24u) | (p[1] << 16u) | (p[2] << 8u) | (p[3]));
-}
-static inline uint16_t get_u16le(uint8_t* p) {
-    return (uint16_t)((p[0]) | (p[1] << 8u));
-}
-static inline uint32_t get_u32le(uint8_t* p) {
-    return (uint32_t)((p[0]) | (p[1] << 8u) | (p[2] << 16u) | (p[3] << 24u));
-}
-
 
 /* ************************************************************************* */
 
@@ -433,7 +404,7 @@ int decode_btf(uint8_t *src_arg, int src_size, int *p_x1, int *p_y1, uint8_t **p
     int img_y0; // [sp+18h] [bp-48h]
     int tmp_x1; // [sp+1Ch] [bp-44h]
     int tmp_y1; // [sp+20h] [bp-40h]
-    __int16 flags1; // [sp+24h] [bp-3Ch]
+    int16_t flags1; // [sp+24h] [bp-3Ch]
     int *p_x1tmp2; // [sp+28h] [bp-38h]
     int *p_y1tmp2; // [sp+2Ch] [bp-34h]
     int v102; // [sp+30h] [bp-30h]
@@ -458,22 +429,22 @@ int decode_btf(uint8_t *src_arg, int src_size, int *p_x1, int *p_y1, uint8_t **p
         p_x1tmp2 = (int *)p_x1tmp1;
         p_y1tmp2 = (int *)p_y1tmp1;
         (flags2) = *((int16_t *)src + 8);
-        img_x2 = *((unsigned __int16 *)src + 15);
-        img_y1 = *((unsigned __int16 *)src + 12);
-        img_x1 = *((unsigned __int16 *)src + 11);
-        img_y2 = *((unsigned __int16 *)src + 16);
+        img_x2 = *((uint16_t *)src + 15);
+        img_y1 = *((uint16_t *)src + 12);
+        img_x1 = *((uint16_t *)src + 11);
+        img_y2 = *((uint16_t *)src + 16);
         flags1 = *((int16_t *)src + 3);
         if ( flags2 & 1 )
         {
             datbuf_len_p = (unsigned int *)(src + 36);
-            img_y3 = *((unsigned __int16 *)src + 14);
-            img_x3 = *((unsigned __int16 *)src + 13);
-            flags2_val = *((unsigned __int16 *)src + 17);
+            img_y3 = *((uint16_t *)src + 14);
+            img_x3 = *((uint16_t *)src + 13);
+            flags2_val = *((uint16_t *)src + 17);
         }
         else
         {
-            img_y3 = *((unsigned __int16 *)src + 14);
-            img_x3 = *((unsigned __int16 *)src + 13);
+            img_y3 = *((uint16_t *)src + 14);
+            img_x3 = *((uint16_t *)src + 13);
             datbuf_len_p = (unsigned int *)(src + 34);
             flags2_val = 0;
         }
@@ -537,7 +508,7 @@ int decode_btf(uint8_t *src_arg, int src_size, int *p_x1, int *p_y1, uint8_t **p
                 tmp_multi = img_x2 & 1;
                 flags2 = 0;
                 imgptr = &imgbuf[4 * flags2_val];
-                dstpos = img_x0 * (unsigned __int16)result + (unsigned __int16)v11;
+                dstpos = img_x0 * (uint16_t)result + (uint16_t)v11;
                 ctr1 = 1;
                 dstptr = &dstbuf[4 * dstpos];
                 do
@@ -575,10 +546,10 @@ int decode_btf(uint8_t *src_arg, int src_size, int *p_x1, int *p_y1, uint8_t **p
         {
             if ( !flags2_val )
                 goto LABEL_45;
-            v27 = (unsigned __int16)result;
-            v28 = img_x0 * (unsigned __int16)result;
+            v27 = (uint16_t)result;
+            v28 = img_x0 * (uint16_t)result;
             v29 = (int)&imgbuf[4 * flags2_val];
-            v30 = &dstbuf[4 * (v28 + (unsigned __int16)v11)];
+            v30 = &dstbuf[4 * (v28 + (uint16_t)v11)];
             if ( flags2 & 0x400 )
             {
                 v56 = (unsigned int)(img_y2 + 1) >> 1;
@@ -677,16 +648,16 @@ int decode_btf(uint8_t *src_arg, int src_size, int *p_x1, int *p_y1, uint8_t **p
                 v31 = ((img_y2 + img_y3) >> 1) - v27;
                 if ( (int16_t)v31 )
                 {
-                    flags2 = (unsigned __int16)v31;
-                    tmp_multi = (unsigned __int16)(((img_x3 + img_x2) >> 1) - v11);
+                    flags2 = (uint16_t)v31;
+                    tmp_multi = (uint16_t)(((img_x3 + img_x2) >> 1) - v11);
                     v32 = 0;
                     do
                     {
-                        if ( (unsigned __int16)((img_x3 + img_x2) >> 1) != (int16_t)v11 )
+                        if ( (uint16_t)((img_x3 + img_x2) >> 1) != (int16_t)v11 )
                         {
-                            v33 = (uint8_t *)(v29 + v32 * (unsigned __int16)(2 * img_x2));
+                            v33 = (uint8_t *)(v29 + v32 * (uint16_t)(2 * img_x2));
                             v34 = &v30[4 * img_x0 * v32];
-                            v35 = (unsigned __int16)(((img_x3 + img_x2) >> 1) - v11);
+                            v35 = (uint16_t)(((img_x3 + img_x2) >> 1) - v11);
                             do
                             {
                                 v36 = *v33;
@@ -732,8 +703,8 @@ int decode_btf(uint8_t *src_arg, int src_size, int *p_x1, int *p_y1, uint8_t **p
         if ( /*_stack_chk_guard ==*/ stack_guard == 0xDEADBEEF ) /* ??? */
             break;
 LABEL_45:
-        result = (unsigned __int16)result;
-        dstptr_ = &dstbuf[4 * ((unsigned __int16)result * img_x0 + (unsigned __int16)v11)];
+        result = (uint16_t)result;
+        dstptr_ = &dstbuf[4 * ((uint16_t)result * img_x0 + (uint16_t)v11)];
         if ( flags2 & 0x400 )
         {
             v60 = (unsigned int)(img_y2 + 1) >> 1;
@@ -828,15 +799,15 @@ LABEL_45:
             v49 = ((img_y2 + p_x1tmp1_) >> 1) - result;
             if ( (int16_t)v49 )
             {
-                flags2 = ((img_x2 + p_y1tmp1) >> 1) - (unsigned __int16)v11;
-                v50 = (unsigned __int16)v49;
-                tmp_multi = (unsigned __int16)(((img_x2 + p_y1tmp1) >> 1) - v11);
+                flags2 = ((img_x2 + p_y1tmp1) >> 1) - (uint16_t)v11;
+                v50 = (uint16_t)v49;
+                tmp_multi = (uint16_t)(((img_x2 + p_y1tmp1) >> 1) - v11);
                 v51 = 0;
                 do
                 {
                     if ( (int16_t)flags2 )
                     {
-                        v52 = &imgbuf[4 * v51 * (unsigned __int16)(2 * img_x2)];
+                        v52 = &imgbuf[4 * v51 * (uint16_t)(2 * img_x2)];
                         v53 = &dstptr_[4 * img_x0 * v51];
                         v54 = tmp_multi;
                         do
@@ -1410,22 +1381,36 @@ static int read_bgad(khux_file_t* kfile, bgad_info_t* info) {
     if (info->name_origin == 'u') {
         uint32_t data_id = get_u32be(info->buf + 0x00);
 
-        if (data_id == 0x89504E47) /* PNG */
+        switch (data_id)
+        {
+        case 0x89504E47: /* PNG */
             strcat(info->name, ".png");
-        else if (data_id == 0x414B4220) /* AKB */
+            break;
+        case 0x414B4220: /* AKB */
             strcat(info->name, ".akb");
-        else if (data_id == 0x4C574600) /* LWF */    
+            break;
+        case 0x4C574600: /* LWF */
             strcat(info->name, ".lwf");
-        else if (data_id == 0x7B0D0A20) /* json start */
+            break;
+        case 0x7B0D0A20: /* json start */
             strcat(info->name, ".json");
-        else if (data_id == 0x7B0A2020) /* json start */
+            break;
+        case 0x7B0A2020: /* json start */
             strcat(info->name, ".ExportJson");
-        else if (data_id == 0x4D415000) /* MAP */
+            break;
+        case 0x4D415000: /* MAP */
             strcat(info->name, ".bin"); /* ??? */
-        else if (data_id == 0x53544700) /* STG */
+            break;
+        case 0x53544700: /* STG */
             strcat(info->name, ".bin");
-        else if (data_id == 0xEFBBBF3C || data_id == 0x3C3F786D) /* XML start */
+            break;
+        case 0xEFBBBF3C: /* XML start */
+        case 0x3C3F786D:
             strcat(info->name, ".plist");
+            break;
+        default:
+            printf("Unkown data id %x\n", data_id);
+        };
     }
 
     return 1;

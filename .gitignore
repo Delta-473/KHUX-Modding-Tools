@@ -419,3 +419,7 @@ FodyWeavers.xsd
 *.exe
 *.out
 *.app
+
+# KHUX data files
+*.mp4
+*.png

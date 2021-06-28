@@ -70,6 +70,7 @@
   <ItemGroup>
     <ClCompile Include="chacha.c" />
     <ClCompile Include="decode_btf.c" />
+    <ClCompile Include="export_image.c" />
     <ClCompile Include="khuxdecrypt3.c" />
     <ClCompile Include="lodepng.c" />
     <ClCompile Include="miniz.c" />
@@ -80,6 +81,7 @@
     <ClInclude Include="ecrypt-machine.h" />
     <ClInclude Include="ecrypt-portable.h" />
     <ClInclude Include="ecrypt-sync.h" />
+    <ClInclude Include="export_image.h" />
     <ClInclude Include="helper_endian.h" />
     <ClInclude Include="lodepng.h" />
     <ClInclude Include="miniz.h" />

@@ -21,6 +21,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <sys/stat.h>
+#include <sys/types.h>
 
 /* miniz (zlib replacement) from: https://github.com/richgel999/miniz */
 #include "miniz.h" //#include "zlib.h"
@@ -36,6 +37,10 @@
 
 // helper endian functions
 #include "helper_endian.h"
+
+// image exporter formats
+#include "export_image.h"
+
 
 /* make sure bigfiles work, not sure which is better in all PCs */
 #ifdef __GNUC__
@@ -311,95 +316,6 @@ struct bgad_info_t {
     
     int is_small;
 };
-
-static int make_bmp(uint8_t* bmpbuf, int bmpbuf_len, int x, int y, uint8_t* imgbuf, int imgbuf_len) {
-
-    if (imgbuf_len + 0x36 > bmpbuf_len) {
-        printf("bmp too big: size %x vs max %x\n", imgbuf_len, bmpbuf_len);
-        return 0;
-    }
-
-    int pos = 0;
-    bmpbuf[pos++] = 0x42;
-    bmpbuf[pos++] = 0x4d;
-    for (int i = 0; i < 8; i++)
-        bmpbuf[pos++] = 0x00;
-    put_u32le(bmpbuf + 2, imgbuf_len + 0x36);
-
-    bmpbuf[pos++] = 0x36;
-    bmpbuf[pos++] = 0x00;
-    bmpbuf[pos++] = 0x00;
-    bmpbuf[pos++] = 0x00;
-    bmpbuf[pos++] = 0x28;
-    bmpbuf[pos++] = 0x00;
-    bmpbuf[pos++] = 0x00;
-    bmpbuf[pos++] = 0x00;
-
-    bmpbuf[pos++] = (x >> 0) & 0xFF;
-    bmpbuf[pos++] = (x >> 8) & 0xFF;
-    bmpbuf[pos++] = 0x00;
-    bmpbuf[pos++] = 0x00;
-    bmpbuf[pos++] = (y >> 0) & 0xFF;
-    bmpbuf[pos++] = (y >> 8) & 0xFF;
-    bmpbuf[pos++] = 0x00;
-    bmpbuf[pos++] = 0x00;
-
-    bmpbuf[pos++] = 0x01;
-    bmpbuf[pos++] = 0x00;
-    bmpbuf[pos++] = 0x20;
-    for (int i = 0; i < 0x19; i++)
-        bmpbuf[pos++] = 0x00;
-
-    /* BMP expects BGRA with pre-multiplied alpha, lossless but it's a lot bigger */
-    for (int i = 0; i < imgbuf_len; i += 4) {
-        uint8_t r = imgbuf[i+0];
-        uint8_t g = imgbuf[i+1];
-        uint8_t b = imgbuf[i+2];
-        imgbuf[i+0] = b;
-        imgbuf[i+1] = g;
-        imgbuf[i+2] = r;
-    }
-
-    //todo incorrect alpha settings in header
-    //todo must reorder data
-    
-    memcpy(&bmpbuf[pos], imgbuf, imgbuf_len);
-
-    return 0x36 + imgbuf_len;
-}
-
-static int make_png(uint8_t *pngbuf, int pngbuf_len, int x, int y, uint8_t* imgbuf, int imgbuf_len) {
-
-    unsigned char* tmpbuf = NULL;
-    size_t tmpbuf_len;
-
-    /* PNG expects RBGA without pre-multiplied alpha, not lossless but not very noticeable */
-    for (int i = 0; i < imgbuf_len; i += 4) {
-        if (imgbuf[i+3] > 0) {
-            imgbuf[i+0] = (float)imgbuf[i+0] / ((float)imgbuf[i+3] / 255.0f);
-            imgbuf[i+1] = (float)imgbuf[i+1] / ((float)imgbuf[i+3] / 255.0f);
-            imgbuf[i+2] = (float)imgbuf[i+2] / ((float)imgbuf[i+3] / 255.0f);
-        }
-    }
-
-    unsigned error = lodepng_encode32(&tmpbuf, &tmpbuf_len, imgbuf, x, y);
-    if (error) {
-        printf("png conversion error %u: %s\n", error, lodepng_error_text(error));
-        free(tmpbuf);
-        return 0;
-    }
-
-    if (tmpbuf_len > pngbuf_len) {
-        printf("png too big: size %x vs max %x\n", tmpbuf_len, pngbuf_len);
-        free(tmpbuf);
-        return 0;
-    }
-
-    memcpy(pngbuf, tmpbuf, tmpbuf_len);
-    free(tmpbuf);
-
-    return tmpbuf_len;
-}
 
 /* BTF seems like a custom PNG (flags that indicate format and usually zlibbed image)
  * we just decode to RGBA using the original function and reencode to other image */
@@ -926,9 +842,13 @@ static void read_index(khux_file_t* kfile, bgad_info_t* info) {
     info->index_info->count2 = get_u32le(bufptr + 0x04); /* ids/names in table 2/3 */
     bufptr += 0x08;
     
-    if (info->index_info->count1 > BGAD_MAX_FILES || 
+    if (info->index_info->count1 > BGAD_MAX_FILES ||
         info->index_info->count2 > BGAD_MAX_FILES)
+    {
+        printf("index count issue count1 %d, count2 %d\n", info->index_info->count1, info->index_info->count2);
         goto fail;
+    }
+        
 
     /* table1: 64b offsets to BGADs, but not to all */
     for (int i = 0; i < info->index_info->count1; i++) {
@@ -1026,12 +946,10 @@ static int set_key(khux_file_t* kfile, bgad_info_t* info, int key_type) {
         case 4: /* other downloaded files */
         default:
             printf("unknown decryption key\n");
-            goto fail;
+            return 0;
     }
 
     return 1;
-fail:
-    return 0;
 }
 
 static void create_directories(char* base, char* path) {
@@ -1059,6 +977,25 @@ static void create_directories(char* base, char* path) {
 
         directory = next_directory;
     }
+}
+
+void printUsage(const char* argv[])
+{
+    printf("Usage: %s [options] file [folder]\n", argv[0]);
+    printf("KHUX decrypt v3 r3 by bnnm. Options:\n");
+    printf(" -l: list files only\n");
+    printf(" -n: print filenames\n");
+    printf(" -d: disable BGT to PNG conversion (faster)\n");
+    //printf(" -b: write BMP instead of PNG\n");
+    printf(" -s: dump tiny files (usually just placeholders)\n");
+    printf(" -f PREFIX: filter by filename prefix\n");
+    printf(" -F SUFFIX: filter by filename suffix\n");
+    printf(" -w N: write from file N (to dump updates)\n");
+    printf(" -W N: write max N files\n");
+    printf(" -k N: force encryption3 key if autodetection fails\n");
+    printf("    1: for files inside .apk\n");
+    printf("    2: for downloaded files in the 'r' folder\n");
+    printf("    3: for saved/cache files?\n");
 }
 
 static int parse_cfg(khux_config_t* cfg, int argc, const char* argv[]) {
@@ -1127,7 +1064,8 @@ static int parse_cfg(khux_config_t* cfg, int argc, const char* argv[]) {
     }
     
     if (cfg->in_path == NULL) {
-        goto fail;
+        printUsage(argv);
+        return 0;
     }
 
     if (cfg->out_path == NULL) {
@@ -1145,21 +1083,7 @@ static int parse_cfg(khux_config_t* cfg, int argc, const char* argv[]) {
 
     return 1;
 fail:
-    printf("Usage: %s [options] file [folder]\n", argv[0]);
-    printf("KHUX decrypt v3 r3 by bnnm. Options:\n");
-    printf(" -l: list files only\n");
-    printf(" -n: print filenames\n");
-    printf(" -d: disable BGT to PNG conversion (faster)\n");
-    //printf(" -b: write BMP instead of PNG\n");
-    printf(" -s: dump tiny files (usually just placeholders)\n");
-    printf(" -f PREFIX: filter by filename prefix\n");
-    printf(" -F SUFFIX: filter by filename suffix\n");
-    printf(" -w N: write from file N (to dump updates)\n");
-    printf(" -W N: write max N files\n");
-    printf(" -k N: force encryption3 key if autodetection fails\n");
-    printf("    1: for files inside .apk\n");
-    printf("    2: for downloaded files in the 'r' folder\n");
-    printf("    3: for saved/cache files?\n");
+    printUsage(argv);
     return 0;
 }
 

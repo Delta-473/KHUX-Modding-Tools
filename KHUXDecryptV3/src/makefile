@@ -13,7 +13,7 @@ DEBUGFLAGS = -g
 CFLAGS = -DD32 $(DEBUGFLAGS) $(INCPATH)
 
 SRCS = \
-	khuxdecrypt3.c chacha.c lodepng.c miniz.c
+	khuxdecrypt3.c chacha.c lodepng.c miniz.c decode_btf.c
 
 OBJS = $(SRCS:.c=.o)
 

@@ -69,11 +69,13 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="chacha.c" />
+    <ClCompile Include="decode_btf.c" />
     <ClCompile Include="khuxdecrypt3.c" />
     <ClCompile Include="lodepng.c" />
     <ClCompile Include="miniz.c" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="decode_btf.h" />
     <ClInclude Include="ecrypt-config.h" />
     <ClInclude Include="ecrypt-machine.h" />
     <ClInclude Include="ecrypt-portable.h" />

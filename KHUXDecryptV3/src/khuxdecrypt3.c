@@ -385,21 +385,20 @@ static int make_png(uint8_t *pngbuf, int pngbuf_len, int x, int y, uint8_t* imgb
     unsigned error = lodepng_encode32(&tmpbuf, &tmpbuf_len, imgbuf, x, y);
     if (error) {
         printf("png conversion error %u: %s\n", error, lodepng_error_text(error));
-        goto fail;
+        free(tmpbuf);
+        return 0;
     }
 
     if (tmpbuf_len > pngbuf_len) {
         printf("png too big: size %x vs max %x\n", tmpbuf_len, pngbuf_len);
-        goto fail;
+        free(tmpbuf);
+        return 0;
     }
 
     memcpy(pngbuf, tmpbuf, tmpbuf_len);
     free(tmpbuf);
 
     return tmpbuf_len;
-fail:
-    free(tmpbuf);
-    return 0;
 }
 
 /* BTF seems like a custom PNG (flags that indicate format and usually zlibbed image)
@@ -437,14 +436,24 @@ static void parse_btf(bgad_info_t* info) {
 
     if (info->cfg->enable_bmp) {
         int bmpbuf_len = make_bmp(info->imgdata, BGAD_MAX_IMG_SIZE, x1, y2, imgbuf, imgbuf_len);
-        if (bmpbuf_len <= 0) goto fail;
+        if (bmpbuf_len <= 0)
+        {
+            free(imgbuf);
+            printf("can't convert BTF in file %i at %"PRIx64"\n", info->count, info->offset);
+            return;
+        }
 
         info->buf = info->imgdata;
         info->buf_size = bmpbuf_len;
     }
     else {
         int pngbuf_len = make_png(info->imgdata, BGAD_MAX_IMG_SIZE, x1, y2, imgbuf, imgbuf_len);
-        if (pngbuf_len <= 0) goto fail;
+        if (pngbuf_len <= 0) 
+        {
+            free(imgbuf);
+            printf("can't convert BTF in file %i at %"PRIx64"\n", info->count, info->offset);
+            return;
+        }
 
         info->buf = info->imgdata;
         info->buf_size = pngbuf_len;
@@ -452,10 +461,6 @@ static void parse_btf(bgad_info_t* info) {
 
     free(imgbuf);
     return;
-    
-fail:
-    free(imgbuf);
-    printf("can't convert BTF in file %i at %"PRIx64"\n", info->count, info->offset);
 }
 
 static void parse_bgi(bgad_info_t* info) {
